@@ -14,7 +14,7 @@ import streamlit as st
 # 1. 페이지 기본 설정 및 Pretendard Variable + #003BF5 시그니처 테마 스타일
 # =============================================================================
 st.set_page_config(
-    page_title="블로그 일일 방문자수 추이",
+    page_title="차담진 블로그 일일 방문자수 추이",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed",
