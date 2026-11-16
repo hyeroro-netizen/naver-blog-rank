@@ -11,10 +11,10 @@ import requests
 import streamlit as st
 
 # =============================================================================
-# 1. 페이지 기본 설정 및 Pretendard 커스텀 스타일
+# 1. 페이지 기본 설정 및 Pretendard Variable + #003BF5 시그니처 테마 스타일
 # =============================================================================
 st.set_page_config(
-    page_title="블로그 일일 방문자수 추이 (일별·월별·연도별)",
+    page_title="블로그 일일 방문자수 추이",
     page_icon="📊",
     layout="wide",
     initial_sidebar_state="collapsed",
@@ -22,6 +22,7 @@ st.set_page_config(
 
 KST = timezone(timedelta(hours=9))
 HISTORY_FILE = "visitor_history.json"
+MAIN_BLUE = "#003BF5"
 
 BLOG_CHANNELS = [
     {"id": "va6xoti5qj", "name": "담소카", "group": "중고차·할부", "url": "https://blog.naver.com/va6xoti5qj"},
@@ -42,7 +43,6 @@ BLOG_CHANNELS = [
     {"id": "carrocar", "name": "차로차", "group": "중고차·할부", "url": "https://blog.naver.com/carrocar"},
 ]
 
-# 실측 초기 베이스라인 데이터 (2026-11-12 ~ 2026-11-16)
 BASELINE_HISTORY = {
     "2026-11-12": {
         "va6xoti5qj": 297, "7avapfrvtbv": 103, "hanto2528": 120, "8ah60uq": 114,
@@ -79,79 +79,238 @@ BASELINE_HISTORY = {
 st.markdown(
     """
     <style>
-    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/static/pretendard.min.css');
-    html, body, [class*="css"] {
-        font-family: 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+    @import url('https://cdn.jsdelivr.net/gh/orioncactus/pretendard@v1.3.9/dist/web/variable/pretendardvariable-dynamic-subset.min.css');
+
+    html, body, [class*="css"], .stApp {
+        font-family: 'Pretendard Variable', 'Pretendard', -apple-system, BlinkMacSystemFont, system-ui, sans-serif !important;
+        background-color: #F6F8FC !important;
         color: #0F172A;
+        letter-spacing: -0.02em;
     }
+
+    /* 상단 짤림 완전 방지: 충분한 상단 여백 확보 */
     .block-container {
-        padding-top: 1.8rem !important;
-        padding-bottom: 3rem !important;
-        max-width: 1280px !important;
+        padding-top: 4.4rem !important;
+        padding-bottom: 4rem !important;
+        max-width: 1380px !important;
     }
+
+    /* 메인 타이틀 배너 */
+    .top-hero-bar {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        border-left: 6px solid #003BF5;
+        border-radius: 18px;
+        padding: 20px 24px;
+        margin-bottom: 18px;
+        box-shadow: 0 4px 16px rgba(0, 59, 245, 0.05);
+    }
+    .top-hero-title {
+        font-size: 1.65rem;
+        font-weight: 850;
+        color: #0F172A;
+        letter-spacing: -0.03em;
+        margin: 0;
+        line-height: 1.3;
+    }
+    .top-hero-sub {
+        font-size: 0.88rem;
+        font-weight: 500;
+        color: #64748B;
+        margin-top: 4px;
+    }
+
+    /* 기본 버튼 컬러를 #003BF5로 통일 */
+    div.stButton > button[kind="primary"] {
+        background-color: #003BF5 !important;
+        border-color: #003BF5 !important;
+        color: #FFFFFF !important;
+        font-weight: 700 !important;
+        border-radius: 12px !important;
+        padding: 0.55rem 1rem !important;
+        box-shadow: 0 4px 12px rgba(0, 59, 245, 0.22) !important;
+    }
+    div.stButton > button[kind="primary"]:hover {
+        background-color: #002ED1 !important;
+        border-color: #002ED1 !important;
+    }
+
+    /* 상단 KPI 요약 카드 (짤림 없는 유연한 레이아웃) */
     .kpi-card {
         background: #FFFFFF;
         border: 1px solid #E2E8F0;
-        border-radius: 16px;
-        padding: 18px 20px;
-        box-shadow: 0 1px 2px rgba(15, 23, 42, 0.03);
+        border-radius: 18px;
+        padding: 20px 22px;
+        min-height: 142px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 2px 8px rgba(15, 23, 42, 0.04);
+    }
+    .kpi-card-highlight {
+        background: linear-gradient(135deg, #F5F8FF 0%, #FFFFFF 100%);
+        border: 1.5px solid #003BF5;
+        border-radius: 18px;
+        padding: 20px 22px;
+        min-height: 142px;
+        display: flex;
+        flex-direction: column;
+        justify-content: space-between;
+        box-shadow: 0 6px 18px rgba(0, 59, 245, 0.10);
     }
     .kpi-label {
-        font-size: 0.76rem;
-        font-weight: 600;
+        font-size: 0.82rem;
+        font-weight: 700;
         color: #64748B;
         margin-bottom: 6px;
     }
     .kpi-value {
-        font-size: 1.75rem;
-        font-weight: 800;
+        font-size: 1.95rem;
+        font-weight: 900;
         color: #0F172A;
         font-variant-numeric: tabular-nums;
+        letter-spacing: -0.03em;
         line-height: 1.2;
+        word-break: keep-all;
+    }
+    .kpi-top1-row {
+        display: flex;
+        align-items: baseline;
+        justify-content: space-between;
+        gap: 8px;
+        flex-wrap: wrap;
+        margin-top: 2px;
+    }
+    .kpi-top1-name {
+        font-size: 1.45rem;
+        font-weight: 850;
+        color: #003BF5;
+        letter-spacing: -0.03em;
+        white-space: nowrap;
+    }
+    .kpi-top1-count {
+        font-size: 1.65rem;
+        font-weight: 900;
+        color: #0F172A;
+        font-variant-numeric: tabular-nums;
+        white-space: nowrap;
     }
     .kpi-sub {
-        font-size: 0.76rem;
+        font-size: 0.8rem;
         color: #475569;
-        margin-top: 8px;
-        padding-top: 8px;
-        border-top: 1px solid #F1F5F9;
+        margin-top: 10px;
+        padding-top: 10px;
+        border-top: 1px solid #EEF2F6;
         font-variant-numeric: tabular-nums;
     }
+
+    /* 16개 업체 카드 (업체명 & 방문자수 대폭 확대 + 컬러 위계) */
     .blog-card {
         background: #FFFFFF;
         border: 1px solid #E2E8F0;
-        border-radius: 16px;
-        padding: 16px;
-        margin-bottom: 12px;
-        transition: all 0.15s ease;
+        border-radius: 18px;
+        padding: 20px;
+        margin-bottom: 16px;
+        transition: transform 0.15s ease, box-shadow 0.15s ease, border-color 0.15s ease;
+        box-shadow: 0 2px 6px rgba(15, 23, 42, 0.03);
     }
     .blog-card:hover {
-        border-color: #10B981;
-        box-shadow: 0 4px 12px rgba(15, 23, 42, 0.06);
+        border-color: #003BF5;
+        box-shadow: 0 8px 24px rgba(0, 59, 245, 0.12);
+        transform: translateY(-2px);
     }
+    .blog-card-top1 {
+        background: linear-gradient(180deg, #F5F8FF 0%, #FFFFFF 45%);
+        border: 2px solid #003BF5;
+        box-shadow: 0 6px 20px rgba(0, 59, 245, 0.10);
+    }
+
+    /* 순위 배지 컬러 비교 */
     .rank-badge-1 {
-        background: #059669; color: #FFFFFF; font-weight: 800;
-        padding: 2px 8px; border-radius: 6px; font-size: 0.75rem;
+        background: #003BF5;
+        color: #FFFFFF;
+        font-weight: 850;
+        padding: 4px 10px;
+        border-radius: 8px;
+        font-size: 0.86rem;
+        box-shadow: 0 2px 8px rgba(0, 59, 245, 0.30);
     }
-    .rank-badge-top {
-        background: #D1FAE5; color: #065F46; font-weight: 700;
-        padding: 2px 8px; border-radius: 6px; font-size: 0.75rem;
+    .rank-badge-23 {
+        background: #E8EEFF;
+        color: #003BF5;
+        border: 1px solid #B8C9FF;
+        font-weight: 800;
+        padding: 3px 9px;
+        border-radius: 8px;
+        font-size: 0.84rem;
     }
-    .rank-badge-normal {
-        background: #F1F5F9; color: #475569; font-weight: 600;
-        padding: 2px 8px; border-radius: 6px; font-size: 0.75rem;
+    .rank-badge-mid {
+        background: #1E293B;
+        color: #FFFFFF;
+        font-weight: 750;
+        padding: 3px 9px;
+        border-radius: 8px;
+        font-size: 0.82rem;
     }
+    .rank-badge-low {
+        background: #F1F5F9;
+        color: #475569;
+        font-weight: 700;
+        padding: 3px 9px;
+        border-radius: 8px;
+        font-size: 0.82rem;
+    }
+
+    /* 업체명 & 방문자수 크게 확대 */
+    .company-name {
+        font-size: 1.32rem;
+        font-weight: 850;
+        color: #0F172A;
+        letter-spacing: -0.03em;
+    }
+    .visitor-number-top {
+        font-size: 2.25rem;
+        font-weight: 900;
+        color: #003BF5;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+    }
+    .visitor-number-normal {
+        font-size: 2.15rem;
+        font-weight: 900;
+        color: #0F172A;
+        font-variant-numeric: tabular-nums;
+        letter-spacing: -0.04em;
+        line-height: 1.1;
+    }
+
+    /* 등락 배지 컬러 대비 */
     .delta-up {
-        background: #ECFDF5; color: #047857; font-weight: 700;
-        padding: 2px 8px; border-radius: 999px; font-size: 0.74rem;
+        background: #E8EEFF;
+        color: #003BF5;
+        font-weight: 800;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-variant-numeric: tabular-nums;
     }
     .delta-down {
-        background: #FFF1F2; color: #BE123C; font-weight: 700;
-        padding: 2px 8px; border-radius: 999px; font-size: 0.74rem;
+        background: #FFF1F2;
+        color: #E11D48;
+        font-weight: 800;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.8rem;
+        font-variant-numeric: tabular-nums;
     }
     .delta-flat {
-        background: #F1F5F9; color: #64748B; font-weight: 600;
-        padding: 2px 8px; border-radius: 999px; font-size: 0.74rem;
+        background: #F1F5F9;
+        color: #64748B;
+        font-weight: 650;
+        padding: 4px 10px;
+        border-radius: 999px;
+        font-size: 0.78rem;
     }
     </style>
     """,
@@ -213,7 +372,7 @@ def fetch_single_blog(blog: dict) -> tuple[str, dict[str, int]]:
 
 
 def load_saved_history() -> dict[str, dict[str, int]]:
-    """로컬 JSON 히스토리와 초기 실측 베이스라인을 병합하여 과거 데이터를 영구 보존합니다."""
+    """로컬 JSON 히스토리와 초기 실측 베이스라인을 병합하여 과거 데이터를 보존합니다."""
     merged: dict[str, dict[str, int]] = {}
     for d_str, b_map in BASELINE_HISTORY.items():
         merged[d_str] = dict(b_map)
@@ -401,18 +560,25 @@ def main() -> None:
     all_dates = sorted(records.keys())
     recent_5d = all_dates[-5:] if len(all_dates) >= 5 else all_dates
 
-    # 상단 헤더 영역
-    col_title, col_date, col_btn = st.columns([5.5, 2.5, 2.0])
+    # 상단 배너 + 컨트롤 바 (상단 짤림 현상 완전 해결)
+    col_title, col_date, col_btn = st.columns([5.6, 2.4, 2.0])
     with col_title:
-        st.markdown("### 📊 블로그 일일 방문자수 추이")
-        st.caption(
-            f"16개 업체 조회수 순위 · 일별·월별·연도별 자동 누적 (총 {len(all_dates)}일 누적됨) "
-            f"· 최근 동기화: {updated_at} KST"
+        st.markdown(
+            f"""
+            <div class="top-hero-bar">
+                <div class="top-hero-title">블로그 일일 방문자수 추이</div>
+                <div class="top-hero-sub">
+                    관리 채널 16개 · 조회수 순위 자동 정렬 · 누적 {len(all_dates)}일 기록 중 · 최근 동기화 {updated_at} KST
+                </div>
+            </div>
+            """,
+            unsafe_allow_html=True,
         )
     with col_date:
+        st.write("")
         date_options = list(reversed(all_dates))
         date_labels = {
-            d: f"{d} (오늘 실시간 순위)" if d == all_dates[-1] else f"{d} (마감 순위)"
+            d: f"📅 {d} (오늘 실시간 순위)" if d == all_dates[-1] else f"📅 {d} (마감 순위)"
             for d in date_options
         }
         selected_date = st.selectbox(
@@ -422,14 +588,15 @@ def main() -> None:
             label_visibility="collapsed",
         )
     with col_btn:
-        if st.button("🔄 지금 즉시 새로고침", use_container_width=True, type="primary"):
+        st.write("")
+        if st.button("🔄 실시간 수치 새로고침", use_container_width=True, type="primary"):
             st.cache_data.clear()
             st.rerun()
 
     df = build_ranked_dataframe(records, selected_date, all_dates)
 
     # -------------------------------------------------------------------------
-    # 상단 핵심 지표 (KPI 4개 카드)
+    # 상단 핵심 지표 (KPI 4개 카드 — 1위 담소카 잘림 방지 및 시인성 강화)
     # -------------------------------------------------------------------------
     sel_total = int(df["선택일표시"].dropna().sum())
     yest_date = all_dates[-2] if len(all_dates) >= 2 else all_dates[-1]
@@ -457,7 +624,7 @@ def main() -> None:
             f"""
             <div class="kpi-card">
                 <div class="kpi-label">{label_1}</div>
-                <div class="kpi-value">{sel_total:,}명</div>
+                <div class="kpi-value" style="color:#003BF5;">{sel_total:,}<span style="font-size:1.0rem; font-weight:600; color:#64748B; margin-left:3px;">명</span></div>
                 <div class="kpi-sub">어제({yest_date[5:]}) 마감 합산: <strong>{yest_total:,}명</strong></div>
             </div>
             """,
@@ -469,7 +636,7 @@ def main() -> None:
             f"""
             <div class="kpi-card">
                 <div class="kpi-label">이번 달({cur_month_num}월) 누적 방문자 합계</div>
-                <div class="kpi-value">{month_total:,}명</div>
+                <div class="kpi-value">{month_total:,}<span style="font-size:1.0rem; font-weight:600; color:#64748B; margin-left:3px;">명</span></div>
                 <div class="kpi-sub">어제 평균 <strong>{avg_yest:.1f}명</strong> · 일 100명↑ <strong>{high_100_cnt}개 업체</strong></div>
             </div>
             """,
@@ -478,10 +645,13 @@ def main() -> None:
     with k3:
         st.markdown(
             f"""
-            <div class="kpi-card">
-                <div class="kpi-label">조회수 1위 블로그 (점유율 {top1_share:.1f}%)</div>
-                <div class="kpi-value" style="color:#059669;">1위 {top1['업체명']} ({top1_val:,}명)</div>
-                <div class="kpi-sub">어제 {int(top1['어제마감'] or 0):,}명 · {cur_month_num}월 누적 <strong>{int(top1['월간누적합계']):,}명</strong></div>
+            <div class="kpi-card-highlight">
+                <div class="kpi-label" style="color:#003BF5;">👑 조회수 1위 업체 (점유율 {top1_share:.1f}%)</div>
+                <div class="kpi-top1-row">
+                    <span class="kpi-top1-name">1위 {top1['업체명']}</span>
+                    <span class="kpi-top1-count">{top1_val:,}<span style="font-size:0.95rem; font-weight:600; color:#475569;">명</span></span>
+                </div>
+                <div class="kpi-sub">어제 <strong>{int(top1['어제마감'] or 0):,}명</strong> · {cur_month_num}월 누적 <strong>{int(top1['월간누적합계']):,}명</strong></div>
             </div>
             """,
             unsafe_allow_html=True,
@@ -493,10 +663,10 @@ def main() -> None:
             f"""
             <div class="kpi-card">
                 <div class="kpi-label">마감일 전일 대비 등락 (최고 상승 · 하락)</div>
-                <div style="font-size:0.95rem; font-weight:700; margin-top:4px; color:#047857;">
-                    ▲ 최고 상승: {surging_row['업체명']} ({s_sign}{int(surging_row['전일증감'])}명 / {s_sign}{surging_row['전일증감률']:.1f}%)
+                <div style="font-size:0.98rem; font-weight:800; margin-top:4px; color:#003BF5;">
+                    ▲ 상승 1위: {surging_row['업체명']} ({s_sign}{int(surging_row['전일증감'])}명 / {s_sign}{surging_row['전일증감률']:.1f}%)
                 </div>
-                <div class="kpi-sub" style="color:#BE123C; font-weight:700;">
+                <div class="kpi-sub" style="color:#E11D48; font-weight:800;">
                     ▼ 최대 하락: {drop_row['업체명']} ({d_sign}{int(drop_row['전일증감'])}명 / {d_sign}{drop_row['전일증감률']:.1f}%)
                 </div>
             </div>
@@ -516,11 +686,11 @@ def main() -> None:
     ])
 
     with tab1:
-        c_left, c_right = st.columns([3.2, 6.8])
+        c_left, c_right = st.columns([3.0, 7.0])
         with c_left:
             chart_mode = st.radio(
-                "차트 보기 기준",
-                options=["전체 합산 추이", "조회수 상위 5개 업체 비교", "개별 업체 상세 추이"],
+                "차트 분석 모드",
+                options=["전체 합산 추이", "상위 5개 업체 컬러 비교", "개별 업체 상세 추이"],
                 horizontal=False,
             )
             selected_blog_name = st.selectbox(
@@ -533,12 +703,15 @@ def main() -> None:
         with c_right:
             plot_dates = all_dates if include_today else all_dates[:-1]
             fig = go.Figure()
+            max_y_val = 10
 
             if chart_mode == "전체 합산 추이":
                 y_totals = [
                     sum(records.get(d, {}).get(b["id"], 0) for b in BLOG_CHANNELS)
                     for d in plot_dates
                 ]
+                if y_totals:
+                    max_y_val = max(y_totals)
                 fig.add_trace(
                     go.Scatter(
                         x=[d[5:].replace("-", "/") for d in plot_dates],
@@ -546,30 +719,42 @@ def main() -> None:
                         mode="lines+markers+text",
                         text=[f"{v:,}명" for v in y_totals],
                         textposition="top center",
+                        textfont=dict(size=13, color="#003BF5", family="Pretendard Variable, Pretendard, sans-serif"),
+                        cliponaxis=False,
                         name="16개 블로그 합산",
-                        line=dict(color="#059669", width=3),
+                        line=dict(color="#003BF5", width=3.5),
+                        marker=dict(size=9, color="#003BF5"),
                         fill="tozeroy",
-                        fillcolor="rgba(16, 185, 129, 0.12)",
+                        fillcolor="rgba(0, 59, 245, 0.10)",
                     )
                 )
-            elif chart_mode == "조회수 상위 5개 업체 비교":
-                palette = ["#059669", "#4F46E5", "#0EA5E9", "#F59E0B", "#EC4899"]
+            elif chart_mode == "상위 5개 업체 컬러 비교":
+                # 선명하게 구분되는 5색 대비 팔레트 (#003BF5 메인 블루 + 코랄레드 + 에메랄드 + 앰버 + 퍼플)
+                palette = ["#003BF5", "#FF2E4C", "#00B894", "#FF8A00", "#7C3AED"]
                 top5_df = df[df["어제마감"].notna()].head(5)
                 for idx, (_, r) in enumerate(top5_df.iterrows()):
                     y_vals = [records.get(d, {}).get(r["id"], None) for d in plot_dates]
+                    valid_y = [v for v in y_vals if v is not None]
+                    if valid_y:
+                        max_y_val = max(max_y_val, max(valid_y))
                     fig.add_trace(
                         go.Scatter(
                             x=[d[5:].replace("-", "/") for d in plot_dates],
                             y=y_vals,
                             mode="lines+markers",
+                            cliponaxis=False,
                             name=f"{int(r['순위'])}위 {r['업체명']}",
-                            line=dict(color=palette[idx % len(palette)], width=2.5),
+                            line=dict(color=palette[idx % len(palette)], width=3 if idx == 0 else 2.4),
+                            marker=dict(size=8 if idx == 0 else 6),
                         )
                     )
             else:
                 target_row = df[df["업체명"] == selected_blog_name].iloc[0]
                 y_vals = [records.get(d, {}).get(target_row["id"], None) for d in plot_dates]
+                valid_y = [v for v in y_vals if v is not None]
                 avg_val = int(target_row["마감일평균"])
+                if valid_y:
+                    max_y_val = max(max(valid_y), avg_val)
                 fig.add_trace(
                     go.Scatter(
                         x=[d[5:].replace("-", "/") for d in plot_dates],
@@ -577,10 +762,13 @@ def main() -> None:
                         mode="lines+markers+text",
                         text=[f"{v:,}명" if v is not None else "" for v in y_vals],
                         textposition="top center",
+                        textfont=dict(size=13, color="#003BF5", family="Pretendard Variable, Pretendard, sans-serif"),
+                        cliponaxis=False,
                         name=f"{target_row['업체명']} 일일 방문자",
-                        line=dict(color="#059669", width=3),
+                        line=dict(color="#003BF5", width=3.5),
+                        marker=dict(size=9, color="#003BF5"),
                         fill="tozeroy",
-                        fillcolor="rgba(16, 185, 129, 0.14)",
+                        fillcolor="rgba(0, 59, 245, 0.11)",
                     )
                 )
                 fig.add_trace(
@@ -588,20 +776,27 @@ def main() -> None:
                         x=[d[5:].replace("-", "/") for d in plot_dates],
                         y=[avg_val] * len(plot_dates),
                         mode="lines",
+                        cliponaxis=False,
                         name=f"마감일 평균 ({avg_val:,}명)",
-                        line=dict(color="#6366F1", width=2, dash="dash"),
+                        line=dict(color="#FF2E4C", width=2, dash="dash"),
                     )
                 )
 
+            # 상단 숫자 라벨이 절대 잘리지 않도록 Y축 상단 여유 공간 28% 확보
             fig.update_layout(
-                height=310,
-                margin=dict(l=16, r=16, t=24, b=16),
+                height=340,
+                margin=dict(l=20, r=20, t=44, b=20),
                 paper_bgcolor="#FFFFFF",
                 plot_bgcolor="#FFFFFF",
                 hovermode="x unified",
-                legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1),
-                yaxis=dict(gridcolor="#F1F5F9", zeroline=False),
-                xaxis=dict(gridcolor="#F8FAFC"),
+                font=dict(family="Pretendard Variable, Pretendard, sans-serif", size=13, color="#1E293B"),
+                legend=dict(orientation="h", yanchor="bottom", y=1.04, xanchor="right", x=1),
+                yaxis=dict(
+                    gridcolor="#EEF2F6",
+                    zeroline=False,
+                    range=[0, max(max_y_val * 1.28, 10)],
+                ),
+                xaxis=dict(gridcolor="#F8FAFC", tickfont=dict(size=13)),
             )
             st.plotly_chart(fig, use_container_width=True)
 
@@ -646,10 +841,32 @@ def main() -> None:
         elif sort_option == "전일 대비 상승폭순":
             filtered_df = filtered_df.sort_values(by="전일증감", ascending=False)
 
+        max_sel_visitor = max(int(df["선택일방문자"].max()), 1)
+
+        # 4열 반응형 카드 그리드 (가독성 대폭 강화 + 컬러 비교 게이지 바)
         grid_cols = st.columns(4)
         for idx, (_, row) in enumerate(filtered_df.iterrows()):
             rank_num = int(row["순위"])
-            badge_cls = "rank-badge-1" if rank_num == 1 else ("rank-badge-top" if rank_num <= 3 else "rank-badge-normal")
+            if rank_num == 1:
+                badge_cls = "rank-badge-1"
+                card_cls = "blog-card blog-card-top1"
+                num_cls = "visitor-number-top"
+                bar_color = "#003BF5"
+            elif rank_num <= 3:
+                badge_cls = "rank-badge-23"
+                card_cls = "blog-card"
+                num_cls = "visitor-number-top"
+                bar_color = "#2563EB"
+            elif rank_num <= 8:
+                badge_cls = "rank-badge-mid"
+                card_cls = "blog-card"
+                num_cls = "visitor-number-normal"
+                bar_color = "#475569"
+            else:
+                badge_cls = "rank-badge-low"
+                card_cls = "blog-card"
+                num_cls = "visitor-number-normal"
+                bar_color = "#94A3B8"
 
             if row["증감유효"]:
                 d_val = int(row["전일증감"])
@@ -663,49 +880,65 @@ def main() -> None:
             else:
                 delta_html = '<span class="delta-flat">그래프 위젯 미표시</span>'
 
-            sel_v = f"{int(row['선택일표시']):,}" if pd.notna(row["선택일표시"]) else "-"
+            sel_raw = int(row["선택일표시"]) if pd.notna(row["선택일표시"]) else 0
+            sel_v = f"{sel_raw:,}" if pd.notna(row["선택일표시"]) else "-"
             yest_v = f"{int(row['어제마감']):,}명" if pd.notna(row["어제마감"]) else "미표시"
+            ratio_pct = min(100, max(4, int(round(sel_raw / max_sel_visitor * 100)))) if sel_raw > 0 else 0
 
             mini_days = []
             for d in recent_5d:
                 v = row.get(d, None)
-                v_txt = f"{int(v)}" if pd.notna(v) else "-"
-                bg = "#ECFDF5; font-weight:700; color:#065F46;" if d == selected_date else "#F8FAFC; color:#475569;"
+                v_txt = f"{int(v):,}" if pd.notna(v) else "-"
+                if d == selected_date:
+                    box_style = "background:#003BF5; color:#FFFFFF; font-weight:800;"
+                    day_lbl_color = "#DBEAFE"
+                else:
+                    box_style = "background:#F1F5F9; color:#1E293B; font-weight:700;"
+                    day_lbl_color = "#64748B"
                 mini_days.append(
-                    f'<div style="flex:1; text-align:center; background:{bg} padding:4px 2px; border-radius:6px; font-size:0.72rem;">'
-                    f'<div style="color:#94A3B8; font-size:0.65rem;">{d[8:]}일</div>'
-                    f'<div>{v_txt}</div></div>'
+                    f'<div style="flex:1; text-align:center; {box_style} padding:6px 2px; border-radius:8px; font-size:0.84rem; font-variant-numeric:tabular-nums;">'
+                    f'<div style="color:{day_lbl_color}; font-size:0.68rem; font-weight:600;">{d[8:]}일</div>'
+                    f'<div style="margin-top:1px;">{v_txt}</div></div>'
                 )
             mini_strip_html = "".join(mini_days)
 
             with grid_cols[idx % 4]:
                 st.markdown(
                     f"""
-                    <div class="blog-card">
-                        <div style="display:flex; justify-content:space-between; align-items:center;">
-                            <div>
+                    <div class="{card_cls}">
+                        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
+                            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
                                 <span class="{badge_cls}">{rank_num}위</span>
-                                <strong style="font-size:1.0rem; margin-left:4px;">{row['업체명']}</strong>
+                                <span class="company-name" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{row['업체명']}</span>
                             </div>
-                            <a href="{row['블로그주소']}" target="_blank" style="font-size:0.75rem; color:#059669; text-decoration:none; font-weight:600;">블로그 ↗</a>
+                            <a href="{row['블로그주소']}" target="_blank" style="font-size:0.8rem; color:#003BF5; text-decoration:none; font-weight:750; flex-shrink:0;">열기 ↗</a>
                         </div>
-                        <div style="font-size:0.72rem; color:#94A3B8; margin-top:2px;">{row['id']} · {row['분류']}</div>
-                        <div style="display:flex; justify-content:space-between; align-items:baseline; margin-top:12px;">
+                        <div style="font-size:0.78rem; color:#64748B; margin-top:4px; font-weight:500;">{row['id']} · {row['분류']}</div>
+
+                        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:14px;">
                             <div>
-                                <div style="font-size:0.7rem; color:#64748B;">{selected_date[5:]} 방문자</div>
-                                <div style="font-size:1.55rem; font-weight:800; color:#0F172A;">{sel_v}<span style="font-size:0.8rem; font-weight:500; color:#64748B;">명</span></div>
+                                <div style="font-size:0.76rem; font-weight:650; color:#64748B; margin-bottom:2px;">{selected_date[5:]} 방문자수</div>
+                                <div class="{num_cls}">{sel_v}<span style="font-size:0.95rem; font-weight:700; color:#475569; margin-left:3px;">명</span></div>
                             </div>
                             <div style="text-align:right;">
-                                <div style="font-size:0.66rem; color:#94A3B8; margin-bottom:2px;">{row['비교기준']}</div>
+                                <div style="font-size:0.7rem; color:#64748B; margin-bottom:4px; font-weight:600;">{row['비교기준']}</div>
                                 {delta_html}
                             </div>
                         </div>
-                        <div style="display:flex; gap:4px; margin-top:12px; padding-top:10px; border-top:1px solid #F1F5F9;">
+
+                        <!-- 1위 대비 조회수 비율 컬러 비교 바 -->
+                        <div style="width:100%; height:6px; background:#EEF2F6; border-radius:999px; margin-top:12px; overflow:hidden;">
+                            <div style="width:{ratio_pct}%; height:100%; background:{bar_color}; border-radius:999px;"></div>
+                        </div>
+
+                        <!-- 최근 5일 그래프 수치 -->
+                        <div style="display:flex; gap:5px; margin-top:12px; padding-top:12px; border-top:1px solid #EEF2F6;">
                             {mini_strip_html}
                         </div>
-                        <div style="display:flex; justify-content:space-between; font-size:0.74rem; color:#64748B; margin-top:8px;">
-                            <span>어제 마감: <strong style="color:#1E293B;">{yest_v}</strong></span>
-                            <span>{cur_month_num}월 누적: <strong style="color:#4F46E5;">{int(row['월간누적합계']):,}명</strong></span>
+
+                        <div style="display:flex; justify-content:space-between; font-size:0.82rem; color:#475569; margin-top:10px; font-weight:600;">
+                            <span>어제 마감: <strong style="color:#0F172A; font-weight:800;">{yest_v}</strong></span>
+                            <span>{cur_month_num}월 누적: <strong style="color:#003BF5; font-weight:800;">{int(row['월간누적합계']):,}명</strong></span>
                         </div>
                     </div>
                     """,
@@ -744,22 +977,31 @@ def main() -> None:
                 f"16개 블로그 총합: **{int(pdf['기간총합계'].sum()):,}명**"
             )
 
+        max_bar_val = max(int(pdf["기간총합계"].max()), 10)
+        bar_colors = [
+            "#003BF5" if i == 0 else ("#2563EB" if i < 3 else ("#4F46E5" if i < 8 else "#94A3B8"))
+            for i in range(len(pdf))
+        ]
         fig_p = go.Figure(
             go.Bar(
                 x=[f"{int(r['순위'])}위 {r['업체명']}" for _, r in pdf.iterrows()],
                 y=pdf["기간총합계"],
                 text=[f"{int(v):,}명" for v in pdf["기간총합계"]],
                 textposition="outside",
-                marker_color=["#059669" if i == 0 else ("#10B981" if i < 3 else "#6366F1") for i in range(len(pdf))],
+                textfont=dict(size=13, color="#0F172A", family="Pretendard Variable, Pretendard, sans-serif"),
+                cliponaxis=False,
+                marker_color=bar_colors,
             )
         )
         fig_p.update_layout(
-            title=f"{period_title} 업체별 누적 방문자 순위 (1위~16위)",
-            height=320,
-            margin=dict(l=16, r=16, t=40, b=16),
+            title=dict(text=f"{period_title} 업체별 누적 방문자 순위 (1위~16위)", font=dict(size=16, color="#0F172A")),
+            height=360,
+            margin=dict(l=20, r=20, t=56, b=24),
             paper_bgcolor="#FFFFFF",
             plot_bgcolor="#FFFFFF",
-            yaxis=dict(gridcolor="#F1F5F9"),
+            font=dict(family="Pretendard Variable, Pretendard, sans-serif", size=13),
+            yaxis=dict(gridcolor="#EEF2F6", range=[0, max_bar_val * 1.25]),
+            xaxis=dict(tickfont=dict(size=13)),
         )
         st.plotly_chart(fig_p, use_container_width=True)
 
