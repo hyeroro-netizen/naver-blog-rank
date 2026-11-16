@@ -902,48 +902,40 @@ def main() -> None:
                 )
             mini_strip_html = "".join(mini_days)
 
+            card_html = "".join([
+                f'<div class="{card_cls}">',
+                '<div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">',
+                '<div style="display:flex; align-items:center; gap:8px; min-width:0;">',
+                f'<span class="{badge_cls}">{rank_num}위</span>',
+                f'<span class="company-name" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{row["업체명"]}</span>',
+                '</div>',
+                f'<a href="{row["블로그주소"]}" target="_blank" style="font-size:0.8rem; color:#003BF5; text-decoration:none; font-weight:750; flex-shrink:0;">열기 ↗</a>',
+                '</div>',
+                f'<div style="font-size:0.78rem; color:#64748B; margin-top:4px; font-weight:500;">{row["id"]} · {row["분류"]}</div>',
+                '<div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:14px;">',
+                '<div>',
+                f'<div style="font-size:0.76rem; font-weight:650; color:#64748B; margin-bottom:2px;">{selected_date[5:]} 방문자수</div>',
+                f'<div class="{num_cls}">{sel_v}<span style="font-size:0.95rem; font-weight:700; color:#475569; margin-left:3px;">명</span></div>',
+                '</div>',
+                '<div style="text-align:right;">',
+                f'<div style="font-size:0.7rem; color:#64748B; margin-bottom:4px; font-weight:600;">{row["비교기준"]}</div>',
+                f'{delta_html}',
+                '</div>',
+                '</div>',
+                '<div style="width:100%; height:6px; background:#EEF2F6; border-radius:999px; margin-top:12px; overflow:hidden;">',
+                f'<div style="width:{ratio_pct}%; height:100%; background:{bar_color}; border-radius:999px;"></div>',
+                '</div>',
+                '<div style="display:flex; gap:5px; margin-top:12px; padding-top:12px; border-top:1px solid #EEF2F6;">',
+                f'{mini_strip_html}',
+                '</div>',
+                '<div style="display:flex; justify-content:space-between; font-size:0.82rem; color:#475569; margin-top:10px; font-weight:600;">',
+                f'<span>어제 마감: <strong style="color:#0F172A; font-weight:800;">{yest_v}</strong></span>',
+                f'<span>{cur_month_num}월 누적: <strong style="color:#003BF5; font-weight:800;">{int(row["월간누적합계"]):,}명</strong></span>',
+                '</div>',
+                '</div>',
+            ])
             with grid_cols[idx % 4]:
-                st.markdown(
-                    f"""
-                    <div class="{card_cls}">
-                        <div style="display:flex; justify-content:space-between; align-items:center; gap:6px;">
-                            <div style="display:flex; align-items:center; gap:8px; min-width:0;">
-                                <span class="{badge_cls}">{rank_num}위</span>
-                                <span class="company-name" style="white-space:nowrap; overflow:hidden; text-overflow:ellipsis;">{row['업체명']}</span>
-                            </div>
-                            <a href="{row['블로그주소']}" target="_blank" style="font-size:0.8rem; color:#003BF5; text-decoration:none; font-weight:750; flex-shrink:0;">열기 ↗</a>
-                        </div>
-                        <div style="font-size:0.78rem; color:#64748B; margin-top:4px; font-weight:500;">{row['id']} · {row['분류']}</div>
-
-                        <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:14px;">
-                            <div>
-                                <div style="font-size:0.76rem; font-weight:650; color:#64748B; margin-bottom:2px;">{selected_date[5:]} 방문자수</div>
-                                <div class="{num_cls}">{sel_v}<span style="font-size:0.95rem; font-weight:700; color:#475569; margin-left:3px;">명</span></div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div style="font-size:0.7rem; color:#64748B; margin-bottom:4px; font-weight:600;">{row['비교기준']}</div>
-                                {delta_html}
-                            </div>
-                        </div>
-
-                        <!-- 1위 대비 조회수 비율 컬러 비교 바 -->
-                        <div style="width:100%; height:6px; background:#EEF2F6; border-radius:999px; margin-top:12px; overflow:hidden;">
-                            <div style="width:{ratio_pct}%; height:100%; background:{bar_color}; border-radius:999px;"></div>
-                        </div>
-
-                        <!-- 최근 5일 그래프 수치 -->
-                        <div style="display:flex; gap:5px; margin-top:12px; padding-top:12px; border-top:1px solid #EEF2F6;">
-                            {mini_strip_html}
-                        </div>
-
-                        <div style="display:flex; justify-content:space-between; font-size:0.82rem; color:#475569; margin-top:10px; font-weight:600;">
-                            <span>어제 마감: <strong style="color:#0F172A; font-weight:800;">{yest_v}</strong></span>
-                            <span>{cur_month_num}월 누적: <strong style="color:#003BF5; font-weight:800;">{int(row['월간누적합계']):,}명</strong></span>
-                        </div>
-                    </div>
-                    """,
-                    unsafe_allow_html=True,
-                )
+                st.markdown(card_html, unsafe_allow_html=True)
 
     with tab2:
         st.markdown("#### 🗓️ 월별 · 연도별 누적 방문자 정리 리포트")
