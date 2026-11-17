@@ -38,7 +38,8 @@ INFO_CATEGORY_KEYWORDS = ["정보", "칼럼", "상식", "뉴스", "가이드", "
 REVIEW_CATEGORY_KEYWORDS = ["후기", "출고", "판매후기", "출고후기", "계약사례", "인도"]
 
 INFO_TITLE_KEYWORDS = [
-    "받는 법", "하는 법", "고르는 법", "구별", "시세조회", "감가", "총정리",
+    "받는 법", "하는 법", "고르는 법", "구분법", "구별", "시세조회", "감가", "총정리",
+    "점검 순서", "경고등", "원인", "증상", "해결", "대처", "관리법", "교체주기",
     "체크리스트", "가이드", "장단점", "차이점", "주의사항", "서류", "수수료",
     "취득세", "이전등록비", "성능점검", "카히스토리", "허위매물", "기준", "요령", "방법",
 ]
@@ -413,19 +414,19 @@ def save_to_gsheet(ws, records: dict[str, dict[str, int]]) -> bool:
 # 3. 네이버 블로그 방문자수 + 최근 포스팅(평일 5일 후기/정보 분류) 수집 엔진
 # =============================================================================
 def classify_post_type(title: str, category: str = "", description: str = "") -> str:
-    """카테고리명(1순위) → 제목 패턴(2순위) → 본문 고객·출고 서사(3순위) 순으로 '후기'와 '정보'를 정밀 분류합니다."""
+    """게시판/카테고리명(1순위) → 제목 패턴(2순위) → 본문 고객·출고 서사(3순위) 순으로 판별합니다."""
     cat_low = category.lower().strip()
     title_low = title.lower().strip()
     desc_clean = re.sub(r"<[^>]+>", " ", description or "").lower()
 
-    # 1순위: 블로그 게시판/카테고리명 기준 (예: '02 자동차정보' vs '01 판매후기')
+    # 1순위: 블로그 게시판/카테고리명 기준 (잘못된 게시판에 올라간 글도 바로 발견 가능)
     if cat_low:
         if any(kw in cat_low for kw in INFO_CATEGORY_KEYWORDS):
             return "정보"
         if any(kw in cat_low for kw in REVIEW_CATEGORY_KEYWORDS):
             return "후기"
 
-    # 2순위: 제목에 명확한 후기 단어 또는 정보성 패턴이 있는 경우
+    # 2순위: 제목에 명확한 후기 단어 또는 정보글 패턴이 있는 경우
     if any(kw in title_low for kw in ["후기", "출고", "인도", "겟!"]):
         return "후기"
     if any(kw in title_low for kw in INFO_TITLE_KEYWORDS):
@@ -607,7 +608,7 @@ def save_local_history(records: dict[str, dict[str, int]]) -> None:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def collect_all_blogs_cached() -> tuple[dict[str, dict[str, int]], dict[str, dict[str, list[dict[str, str]]]], str, int, str]:
+def collect_all_blogs_cached(_version: str = "v4") -> tuple[dict[str, dict[str, int]], dict[str, dict[str, list[dict[str, str]]]], str, int, str]:
     """구글 시트 + 로컬 기록을 불러온 뒤, 네이버 실시간 방문자수 및 포스팅 현황을 병합합니다."""
     records = load_local_history()
     posts_by_blog: dict[str, dict[str, list[dict[str, str]]]] = {}
@@ -712,7 +713,7 @@ def build_ranked_dataframe(
             "월간누적합계": sum_month,
             "연간누적합계": sum_year,
         }
-        for d in recent_5d:
+        for d in all_dates:
             row_data[d] = records.get(d, {}).get(bid, None)
         rows.append(row_data)
 
