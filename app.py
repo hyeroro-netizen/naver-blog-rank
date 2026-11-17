@@ -1,17 +1,22 @@
+import email.utils
+import html
 import json
 import os
 import re
+import urllib.parse
 import xml.etree.ElementTree as ET
 from concurrent.futures import ThreadPoolExecutor, as_completed
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 
+import gspread
 import pandas as pd
 import plotly.graph_objects as go
 import requests
 import streamlit as st
+from google.oauth2.service_account import Credentials
 
 # =============================================================================
-# 1. 페이지 기본 설정 및 Pretendard Variable + #003BF5 시그니처 테마 스타일
+# 1. 페이지 기본 설정 및 구글 시트(블로그추이) 설정
 # =============================================================================
 st.set_page_config(
     page_title="차담진 블로그 일일 방문자수 추이",
@@ -24,15 +29,26 @@ KST = timezone(timedelta(hours=9))
 HISTORY_FILE = "visitor_history.json"
 MAIN_BLUE = "#003BF5"
 
+SPREADSHEET_ID = "14NIjDOA9y8RKuSCfm_-y5AScBQl49tOzv7Sxkv97LBw"
+SHEET_TAB_NAME = "블로그추이"
+
+WEEKDAY_KR = ["월", "화", "수", "목", "금", "토", "일"]
+
+REVIEW_KEYWORDS = [
+    "후기", "출고", "인도", "계약", "방문", "고객님", "회원님", "사례",
+    "승인", "진행", "완료", "실제", "매입", "판매후기", "출고후기",
+    "리스후기", "렌트후기", "할부후기", "성공", "인터뷰", "출고건",
+]
+
 BLOG_CHANNELS = [
     {"id": "va6xoti5qj", "name": "담소카", "group": "중고차·할부", "url": "https://blog.naver.com/va6xoti5qj"},
     {"id": "7avapfrvtbv", "name": "진담카", "group": "중고차·할부", "url": "https://blog.naver.com/7avapfrvtbv"},
+    {"id": "jqqktejtgj", "name": "중부해", "group": "중고차·할부", "url": "https://blog.naver.com/jqqktejtgj"},
     {"id": "hanto2528", "name": "회파중", "group": "회생·파산·할부", "url": "https://blog.naver.com/hanto2528"},
     {"id": "8ah60uq", "name": "심운리스", "group": "오토리스·렌트", "url": "https://blog.naver.com/8ah60uq"},
     {"id": "sh-7200", "name": "파복회", "group": "회생·파산·할부", "url": "https://blog.naver.com/sh-7200"},
     {"id": "joongpahoe", "name": "중파회", "group": "회생·파산·할부", "url": "https://blog.naver.com/joongpahoe"},
     {"id": "43n3km-m10e4ee", "name": "차품딜", "group": "중고차·할부", "url": "https://blog.naver.com/43n3km-m10e4ee"},
-    {"id": "jqqktejtgj", "name": "중부해", "group": "중고차·할부", "url": "https://blog.naver.com/jqqktejtgj"},
     {"id": "ssswin00", "name": "여봉카", "group": "중고차·할부", "url": "https://blog.naver.com/ssswin00"},
     {"id": "dadamauto", "name": "다담오토리스", "group": "오토리스·렌트", "url": "https://blog.naver.com/dadamauto"},
     {"id": "simwooin00", "name": "리턴카", "group": "오토리스·렌트", "url": "https://blog.naver.com/simwooin00"},
@@ -42,6 +58,8 @@ BLOG_CHANNELS = [
     {"id": "easyplancar_", "name": "이지플랜카", "group": "신차·장기렌트", "url": "https://blog.naver.com/easyplancar_"},
     {"id": "carrocar", "name": "차로차", "group": "중고차·할부", "url": "https://blog.naver.com/carrocar"},
 ]
+
+NAME_TO_ID = {b["name"]: b["id"] for b in BLOG_CHANNELS}
 
 BASELINE_HISTORY = {
     "2026-11-12": {
@@ -69,10 +87,10 @@ BASELINE_HISTORY = {
         "easyplancar_": 2, "carrocar": 7,
     },
     "2026-11-16": {
-        "va6xoti5qj": 113, "7avapfrvtbv": 56, "hanto2528": 37, "8ah60uq": 33,
-        "sh-7200": 28, "joongpahoe": 26, "43n3km-m10e4ee": 25, "jqqktejtgj": 21,
-        "ssswin00": 17, "dadamauto": 13, "simwooin00": 9, "vbsr27960": 9,
-        "kathyprovenzano": 4, "gpdltlsck": 3, "easyplancar_": 3, "carrocar": 2,
+        "va6xoti5qj": 289, "7avapfrvtbv": 162, "jqqktejtgj": 124, "hanto2528": 135,
+        "8ah60uq": 85, "sh-7200": 68, "joongpahoe": 79, "43n3km-m10e4ee": 82,
+        "ssswin00": 17, "dadamauto": 13, "simwooin00": 35, "vbsr27960": 14,
+        "kathyprovenzano": 19, "gpdltlsck": 12, "easyplancar_": 5, "carrocar": 6,
     },
 }
 
@@ -88,14 +106,12 @@ st.markdown(
         letter-spacing: -0.02em;
     }
 
-    /* 상단 짤림 완전 방지: 충분한 상단 여백 확보 */
     .block-container {
         padding-top: 4.4rem !important;
         padding-bottom: 4rem !important;
         max-width: 1380px !important;
     }
 
-    /* 메인 타이틀 배너 */
     .top-hero-bar {
         background: #FFFFFF;
         border: 1px solid #E2E8F0;
@@ -120,7 +136,6 @@ st.markdown(
         margin-top: 4px;
     }
 
-    /* 기본 버튼 컬러를 #003BF5로 통일 */
     div.stButton > button[kind="primary"] {
         background-color: #003BF5 !important;
         border-color: #003BF5 !important;
@@ -135,7 +150,6 @@ st.markdown(
         border-color: #002ED1 !important;
     }
 
-    /* 상단 KPI 요약 카드 (짤림 없는 유연한 레이아웃) */
     .kpi-card {
         background: #FFFFFF;
         border: 1px solid #E2E8F0;
@@ -204,7 +218,6 @@ st.markdown(
         font-variant-numeric: tabular-nums;
     }
 
-    /* 16개 업체 카드 (업체명 & 방문자수 대폭 확대 + 컬러 위계) */
     .blog-card {
         background: #FFFFFF;
         border: 1px solid #E2E8F0;
@@ -225,7 +238,6 @@ st.markdown(
         box-shadow: 0 6px 20px rgba(0, 59, 245, 0.10);
     }
 
-    /* 순위 배지 컬러 비교 */
     .rank-badge-1 {
         background: #003BF5;
         color: #FFFFFF;
@@ -261,7 +273,6 @@ st.markdown(
         font-size: 0.82rem;
     }
 
-    /* 업체명 & 방문자수 크게 확대 */
     .company-name {
         font-size: 1.32rem;
         font-weight: 850;
@@ -285,7 +296,6 @@ st.markdown(
         line-height: 1.1;
     }
 
-    /* 등락 배지 컬러 대비 */
     .delta-up {
         background: #E8EEFF;
         color: #003BF5;
@@ -319,10 +329,182 @@ st.markdown(
 
 
 # =============================================================================
-# 2. 네이버 블로그 일일 방문자수 실시간 수집 및 무제한 누적 엔진
+# 2. 구글 시트(블로그추이 탭) 영구 저장 · 불러오기 커넥터
 # =============================================================================
-def fetch_single_blog(blog: dict) -> tuple[str, dict[str, int]]:
-    """단일 블로그의 최근 5일 XML 데이터 및 모바일 당일 방문자수를 수집합니다."""
+def get_gsheet_worksheet():
+    secret_key = None
+    for key_name in ("gcp_service_account", "google_service_account", "service_account"):
+        if key_name in st.secrets:
+            secret_key = dict(st.secrets[key_name])
+            break
+    if not secret_key:
+        return None, "구글 시트 미연결(로컬 저장 중)"
+
+    try:
+        scopes = [
+            "https://www.googleapis.com/auth/spreadsheets",
+            "https://www.googleapis.com/auth/drive",
+        ]
+        creds = Credentials.from_service_account_info(secret_key, scopes=scopes)
+        client = gspread.authorize(creds)
+        spreadsheet = client.open_by_key(SPREADSHEET_ID)
+        try:
+            ws = spreadsheet.worksheet(SHEET_TAB_NAME)
+        except gspread.WorksheetNotFound:
+            ws = spreadsheet.add_worksheet(title=SHEET_TAB_NAME, rows=500, cols=20)
+        return ws, "구글 시트(블로그추이) 실시간 연동됨"
+    except Exception as e:
+        return None, f"구글 시트 연결 확인 필요 ({type(e).__name__})"
+
+
+def load_from_gsheet(ws) -> dict[str, dict[str, int]]:
+    loaded: dict[str, dict[str, int]] = {}
+    try:
+        all_rows = ws.get_all_values()
+        if len(all_rows) < 2:
+            return loaded
+        headers = [h.strip() for h in all_rows[0]]
+        for row in all_rows[1:]:
+            if not row or not re.match(r"^\d{4}-\d{2}-\d{2}$", row[0].strip()):
+                continue
+            d_str = row[0].strip()
+            loaded[d_str] = {}
+            for col_idx, col_name in enumerate(headers[1:], start=1):
+                if col_idx >= len(row):
+                    continue
+                bid = NAME_TO_ID.get(col_name)
+                if bid and row[col_idx].strip() != "":
+                    val_clean = row[col_idx].replace(",", "").strip()
+                    if val_clean.isdigit():
+                        loaded[d_str][bid] = int(val_clean)
+    except Exception:
+        pass
+    return loaded
+
+
+def save_to_gsheet(ws, records: dict[str, dict[str, int]]) -> bool:
+    try:
+        headers = ["날짜"] + [b["name"] for b in BLOG_CHANNELS] + ["전체합계"]
+        rows = [headers]
+        for d_str in sorted(records.keys()):
+            day_map = records[d_str]
+            vals = [day_map.get(b["id"], "") for b in BLOG_CHANNELS]
+            day_sum = sum(v for v in vals if isinstance(v, int))
+            rows.append([d_str] + vals + [day_sum])
+        ws.clear()
+        ws.update(range_name="A1", values=rows, value_input_option="USER_ENTERED")
+        return True
+    except Exception:
+        return False
+
+
+# =============================================================================
+# 3. 네이버 블로그 방문자수 + 최근 포스팅(평일 5일 후기/정보 분류) 수집 엔진
+# =============================================================================
+def classify_post_type(title: str, category: str = "", description: str = "") -> str:
+    """포스팅 제목·카테고리·본문 요약 키워드를 분석해 '후기' 또는 '정보'로 분류합니다."""
+    combined_head = f"{title} {category}".lower()
+    for kw in REVIEW_KEYWORDS:
+        if kw in combined_head:
+            return "후기"
+    desc_hits = sum(1 for kw in REVIEW_KEYWORDS if kw in description.lower())
+    if desc_hits >= 2:
+        return "후기"
+    return "정보"
+
+
+def get_recent_5_weekdays(ref_date_str: str) -> list[str]:
+    """기준일 이하 가장 최근 평일(월~금) 5개 날짜(YYYY-MM-DD)를 오름차순으로 반환합니다."""
+    try:
+        cur_dt = datetime.strptime(ref_date_str, "%Y-%m-%d").date()
+    except Exception:
+        cur_dt = datetime.now(KST).date()
+
+    weekdays: list[str] = []
+    scan_dt = cur_dt
+    while len(weekdays) < 5:
+        if scan_dt.weekday() < 5:  # 0=월, 1=화, 2=수, 3=목, 4=금
+            weekdays.append(scan_dt.strftime("%Y-%m-%d"))
+        scan_dt -= timedelta(days=1)
+    weekdays.reverse()
+    return weekdays
+
+
+def fetch_blog_posts_by_date(blog_id: str) -> dict[str, list[dict[str, str]]]:
+    """네이버 블로그 RSS 및 글 목록 API를 통해 날짜별 포스팅(후기/정보, 제목, 링크)을 수집합니다."""
+    posts_by_date: dict[str, list[dict[str, str]]] = {}
+    headers = {
+        "User-Agent": (
+            "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+            "AppleWebKit/537.36 (KHTML, like Gecko) Chrome/130.0.0.0 Safari/537.36"
+        ),
+        "Referer": f"https://blog.naver.com/{blog_id}",
+    }
+
+    # 1차: 네이버 블로그 공식 RSS 피드 조회 (제목, 카테고리, 본문 요약, 정확한 발행일)
+    rss_url = f"https://rss.blog.naver.com/{blog_id}.xml"
+    try:
+        resp = requests.get(rss_url, headers=headers, timeout=8)
+        if resp.status_code == 200 and "<item>" in resp.text:
+            root = ET.fromstring(resp.text)
+            for item in root.findall("./channel/item"):
+                title = (item.findtext("title") or "").strip()
+                link = (item.findtext("link") or f"https://blog.naver.com/{blog_id}").strip()
+                pub_date_raw = (item.findtext("pubDate") or "").strip()
+                category = (item.findtext("category") or "").strip()
+                desc = (item.findtext("description") or "").strip()
+                if not pub_date_raw:
+                    continue
+                try:
+                    dt = email.utils.parsedate_to_datetime(pub_date_raw).astimezone(KST)
+                    d_str = dt.strftime("%Y-%m-%d")
+                    p_type = classify_post_type(title, category, desc)
+                    posts_by_date.setdefault(d_str, []).append(
+                        {"type": p_type, "title": title, "link": link}
+                    )
+                except Exception:
+                    continue
+    except Exception:
+        pass
+
+    # 2차 폴백: RSS가 비어있는 경우 PostTitleListAsync JSON 조회
+    if not posts_by_date:
+        list_url = (
+            f"https://blog.naver.com/PostTitleListAsync.naver"
+            f"?blogId={blog_id}&currentPage=1&countPerPage=30"
+        )
+        try:
+            resp = requests.get(list_url, headers=headers, timeout=8)
+            if resp.status_code == 200:
+                cleaned = resp.text.replace("\\'", "'")
+                data = json.loads(cleaned)
+                for item in data.get("postList", []):
+                    raw_title = urllib.parse.unquote(item.get("title", "")).replace("+", " ")
+                    title = html.unescape(raw_title).strip()
+                    add_date = str(item.get("addDate", "")).strip()
+                    log_no = str(item.get("logNo", "")).strip()
+                    link = f"https://blog.naver.com/{blog_id}/{log_no}" if log_no else f"https://blog.naver.com/{blog_id}"
+
+                    d_str = None
+                    m_dot = re.match(r"^(\d{4})\.\s*(\d{1,2})\.\s*(\d{1,2})", add_date)
+                    if m_dot:
+                        d_str = f"{m_dot.group(1)}-{int(m_dot.group(2)):02d}-{int(m_dot.group(3)):02d}"
+                    elif "전" in add_date or "방금" in add_date:
+                        d_str = datetime.now(KST).strftime("%Y-%m-%d")
+
+                    if d_str:
+                        p_type = classify_post_type(title)
+                        posts_by_date.setdefault(d_str, []).append(
+                            {"type": p_type, "title": title, "link": link}
+                        )
+        except Exception:
+            pass
+
+    return posts_by_date
+
+
+def fetch_single_blog(blog: dict) -> tuple[str, dict[str, int], dict[str, list[dict[str, str]]]]:
+    """단일 블로그의 일별 방문자수(5일 XML + 모바일)와 최근 포스팅 목록을 함께 수집합니다."""
     blog_id = blog["id"]
     headers = {
         "User-Agent": (
@@ -368,15 +550,12 @@ def fetch_single_blog(blog: dict) -> tuple[str, dict[str, int]]:
     except Exception:
         pass
 
-    return blog_id, daily_counts
+    posts_map = fetch_blog_posts_by_date(blog_id)
+    return blog_id, daily_counts, posts_map
 
 
-def load_saved_history() -> dict[str, dict[str, int]]:
-    """로컬 JSON 히스토리와 초기 실측 베이스라인을 병합하여 과거 데이터를 보존합니다."""
-    merged: dict[str, dict[str, int]] = {}
-    for d_str, b_map in BASELINE_HISTORY.items():
-        merged[d_str] = dict(b_map)
-
+def load_local_history() -> dict[str, dict[str, int]]:
+    merged: dict[str, dict[str, int]] = {d: dict(m) for d, m in BASELINE_HISTORY.items()}
     if os.path.exists(HISTORY_FILE):
         try:
             with open(HISTORY_FILE, "r", encoding="utf-8") as f:
@@ -393,8 +572,7 @@ def load_saved_history() -> dict[str, dict[str, int]]:
     return merged
 
 
-def save_history(records: dict[str, dict[str, int]]) -> None:
-    """수집된 날짜별 방문자 기록을 파일에 누적 저장합니다."""
+def save_local_history(records: dict[str, dict[str, int]]) -> None:
     try:
         with open(HISTORY_FILE, "w", encoding="utf-8") as f:
             json.dump(records, f, ensure_ascii=False, indent=2)
@@ -403,16 +581,24 @@ def save_history(records: dict[str, dict[str, int]]) -> None:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def collect_all_blogs_cached() -> tuple[dict[str, dict[str, int]], str, int]:
-    """16개 블로그를 병렬 조회하여 기존 히스토리에 최신 5일 데이터를 누적 병합합니다."""
-    records = load_saved_history()
-    success_count = 0
+def collect_all_blogs_cached() -> tuple[dict[str, dict[str, int]], dict[str, dict[str, list[dict[str, str]]]], str, int, str]:
+    """구글 시트 + 로컬 기록을 불러온 뒤, 네이버 실시간 방문자수 및 포스팅 현황을 병합합니다."""
+    records = load_local_history()
+    posts_by_blog: dict[str, dict[str, list[dict[str, str]]]] = {}
 
+    ws, gsheet_status = get_gsheet_worksheet()
+    if ws is not None:
+        gsheet_records = load_from_gsheet(ws)
+        for d_str, b_map in gsheet_records.items():
+            records.setdefault(d_str, {}).update(b_map)
+
+    success_count = 0
     with ThreadPoolExecutor(max_workers=8) as executor:
         futures = [executor.submit(fetch_single_blog, blog) for blog in BLOG_CHANNELS]
         for future in as_completed(futures):
             try:
-                blog_id, fetched_map = future.result()
+                blog_id, fetched_map, posts_map = future.result()
+                posts_by_blog[blog_id] = posts_map
                 if fetched_map:
                     success_count += 1
                     for d_str, cnt in fetched_map.items():
@@ -420,18 +606,21 @@ def collect_all_blogs_cached() -> tuple[dict[str, dict[str, int]], str, int]:
             except Exception:
                 pass
 
-    save_history(records)
+    save_local_history(records)
+    if ws is not None:
+        saved_ok = save_to_gsheet(ws, records)
+        gsheet_status = "구글 시트(블로그추이) 자동 저장 완료" if saved_ok else "구글 시트 저장 실패(권한 확인 필요)"
+
     updated_at = datetime.now(KST).strftime("%Y-%m-%d %H:%M:%S")
-    return records, updated_at, success_count
+    return records, posts_by_blog, updated_at, success_count, gsheet_status
 
 
 # =============================================================================
-# 3. 일별 · 월별 · 연도별 순위 및 통계 산출 함수
+# 4. 일별 · 월별 · 연도별 순위 및 통계 산출 함수
 # =============================================================================
 def build_ranked_dataframe(
     records: dict[str, dict[str, int]], selected_date: str, all_dates: list[str]
 ) -> pd.DataFrame:
-    """선택한 기준일 방문자수 순위(1위~16위) 및 월간·연간 누적 통계를 생성합니다."""
     recent_5d = all_dates[-5:] if len(all_dates) >= 5 else all_dates
     completed_dates = [d for d in all_dates if d != all_dates[-1]] or all_dates
 
@@ -514,7 +703,6 @@ def build_ranked_dataframe(
 def build_period_summary_dataframe(
     records: dict[str, dict[str, int]], all_dates: list[str], target_prefix: str
 ) -> tuple[pd.DataFrame, list[str], int]:
-    """선택한 월(YYYY-MM) 또는 연도(YYYY) 기준의 업체별 순위 및 월별 집계표를 생성합니다."""
     period_dates = [d for d in all_dates if d.startswith(target_prefix)]
     months_in_period = sorted({d[:7] for d in period_dates})
 
@@ -552,23 +740,71 @@ def build_period_summary_dataframe(
     return pdf, months_in_period, len(period_dates)
 
 
+def build_weekday_post_strip_html(blog_id: str, weekdays_5: list[str], posts_by_blog: dict) -> str:
+    """각 카드 내 일별 방문자수 회색 박스 바로 아랫줄에 들어갈 '평일 5일 포스팅 현황' 5칸 HTML을 생성합니다."""
+    blog_posts = posts_by_blog.get(blog_id, {})
+    cells = []
+
+    for d_str in weekdays_5:
+        dt_obj = datetime.strptime(d_str, "%Y-%m-%d").date()
+        wd_kr = WEEKDAY_KR[dt_obj.weekday()]
+        short_date = f"{dt_obj.month}/{dt_obj.day}({wd_kr})"
+        day_items = blog_posts.get(d_str, [])
+
+        if not day_items:
+            cell_html = (
+                f'<div style="flex:1; text-align:center; background:#F8FAFC; border:1px dashed #CBD5E1; '
+                f'color:#94A3B8; padding:5px 2px; border-radius:8px; font-size:0.76rem;">'
+                f'<div style="font-size:0.65rem; color:#94A3B8; font-weight:600;">{short_date}</div>'
+                f'<div style="margin-top:2px; font-weight:700;">미등록</div></div>'
+            )
+        else:
+            types = {p["type"] for p in day_items}
+            first_link = html.escape(day_items[0].get("link", f"https://blog.naver.com/{blog_id}"), quote=True)
+            tooltip = html.escape(" / ".join(p.get("title", "") for p in day_items), quote=True)
+            cnt_suffix = f"×{len(day_items)}" if len(day_items) > 1 else ""
+
+            if "후기" in types and "정보" in types:
+                bg_style = "background:linear-gradient(135deg, #003BF5 0%, #00B894 100%); color:#FFFFFF;"
+                date_color = "#E0E7FF"
+                label_txt = "후기+정보"
+            elif "후기" in types:
+                bg_style = "background:#003BF5; color:#FFFFFF;"
+                date_color = "#DBEAFE"
+                label_txt = f"후기{cnt_suffix}"
+            else:
+                bg_style = "background:#00B894; color:#FFFFFF;"
+                date_color = "#D1FAE5"
+                label_txt = f"정보{cnt_suffix}"
+
+            cell_html = (
+                f'<a href="{first_link}" target="_blank" title="{tooltip}" '
+                f'style="flex:1; text-decoration:none; text-align:center; {bg_style} '
+                f'padding:5px 2px; border-radius:8px; font-size:0.78rem; display:block; box-shadow:0 1px 3px rgba(15,23,42,0.08);">'
+                f'<div style="font-size:0.64rem; color:{date_color}; font-weight:600;">{short_date}</div>'
+                f'<div style="margin-top:2px; font-weight:800;">{label_txt}</div></a>'
+            )
+        cells.append(cell_html)
+
+    return "".join(cells)
+
+
 # =============================================================================
-# 4. 메인 화면 렌더링
+# 5. 메인 화면 렌더링
 # =============================================================================
 def main() -> None:
-    records, updated_at, live_count = collect_all_blogs_cached()
+    records, posts_by_blog, updated_at, live_count, gsheet_status = collect_all_blogs_cached()
     all_dates = sorted(records.keys())
     recent_5d = all_dates[-5:] if len(all_dates) >= 5 else all_dates
 
-    # 상단 배너 + 컨트롤 바 (상단 짤림 현상 완전 해결)
     col_title, col_date, col_btn = st.columns([5.6, 2.4, 2.0])
     with col_title:
         st.markdown(
             f"""
             <div class="top-hero-bar">
-                <div class="top-hero-title">블로그 일일 방문자수 추이</div>
+                <div class="top-hero-title">차담진 블로그 일일 방문자수 추이</div>
                 <div class="top-hero-sub">
-                    관리 채널 16개 · 조회수 순위 자동 정렬 · 누적 {len(all_dates)}일 기록 중 · 최근 동기화 {updated_at} KST
+                    관리 채널 16개 · 조회수 순위 자동 정렬 · 누적 {len(all_dates)}일 기록 중 · {gsheet_status} ({updated_at} KST)
                 </div>
             </div>
             """,
@@ -593,11 +829,19 @@ def main() -> None:
             st.cache_data.clear()
             st.rerun()
 
-    df = build_ranked_dataframe(records, selected_date, all_dates)
+    if "미연결" in gsheet_status or "확인 필요" in gsheet_status:
+        with st.expander("⚙️ 구글 시트(블로그추이) 자동 저장 연결 방법 안내 (최초 1회 설정)"):
+            st.markdown(
+                f"""
+                1. 구글 시트([열기](https://docs.google.com/spreadsheets/d/{SPREADSHEET_ID}/edit))에 **`{SHEET_TAB_NAME}`** 탭을 만들고, 서비스 계정 이메일(`...@...iam.gserviceaccount.com`)을 **편집자**로 공유합니다.
+                2. Streamlit Cloud 앱 화면 우측 하단 **Manage app → Settings → Secrets**에 `[gcp_service_account]` 키를 붙여넣고 저장하면 영구 자동 저장이 시작됩니다.
+                """
+            )
 
-    # -------------------------------------------------------------------------
-    # 상단 핵심 지표 (KPI 4개 카드 — 1위 담소카 잘림 방지 및 시인성 강화)
-    # -------------------------------------------------------------------------
+    df = build_ranked_dataframe(records, selected_date, all_dates)
+    weekdays_5 = get_recent_5_weekdays(selected_date)
+
+    # KPI 4개 카드
     sel_total = int(df["선택일표시"].dropna().sum())
     yest_date = all_dates[-2] if len(all_dates) >= 2 else all_dates[-1]
     yest_total = int(sum(records.get(yest_date, {}).values()))
@@ -676,9 +920,6 @@ def main() -> None:
 
     st.write("")
 
-    # -------------------------------------------------------------------------
-    # 탭 구성: 1) 일별 조회수 순위 대시보드  2) 월별 · 연도별 데이터 정리  3) 일자별 전체 비교표
-    # -------------------------------------------------------------------------
     tab1, tab2, tab3 = st.tabs([
         "📈 일별 조회수 순위 대시보드",
         "🗓️ 월별 · 연도별 데이터 정리",
@@ -729,7 +970,6 @@ def main() -> None:
                     )
                 )
             elif chart_mode == "상위 5개 업체 컬러 비교":
-                # 선명하게 구분되는 5색 대비 팔레트 (#003BF5 메인 블루 + 코랄레드 + 에메랄드 + 앰버 + 퍼플)
                 palette = ["#003BF5", "#FF2E4C", "#00B894", "#FF8A00", "#7C3AED"]
                 top5_df = df[df["어제마감"].notna()].head(5)
                 for idx, (_, r) in enumerate(top5_df.iterrows()):
@@ -782,7 +1022,6 @@ def main() -> None:
                     )
                 )
 
-            # 상단 숫자 라벨이 절대 잘리지 않도록 Y축 상단 여유 공간 28% 확보
             fig.update_layout(
                 height=340,
                 margin=dict(l=20, r=20, t=44, b=20),
@@ -800,7 +1039,6 @@ def main() -> None:
             )
             st.plotly_chart(fig, use_container_width=True)
 
-        # 필터 및 정렬 바
         f_col1, f_col2, f_col3 = st.columns([4, 3, 3])
         with f_col1:
             search_q = st.text_input("🔍 업체명 또는 블로그 ID 검색", placeholder="예: 담소카, 심운리스, va6xoti5qj")
@@ -819,6 +1057,21 @@ def main() -> None:
                     "전일 대비 상승폭순",
                 ],
             )
+
+        # 포스팅 구분 범례 바
+        st.markdown(
+            "".join([
+                '<div style="display:flex; justify-content:space-between; align-items:center; flex-wrap:wrap; ',
+                'background:#FFFFFF; border:1px solid #E2E8F0; border-radius:12px; padding:10px 16px; margin-bottom:14px; font-size:0.82rem;">',
+                '<div style="font-weight:750; color:#334155;">📌 카드 하단 평일 5일(월~금) 포스팅 자동 분류 안내 (칸 클릭 시 해당 글로 이동)</div>',
+                '<div style="display:flex; align-items:center; gap:14px; font-weight:700;">',
+                '<span style="display:inline-flex; align-items:center; gap:5px; color:#003BF5;"><span style="width:10px; height:10px; border-radius:3px; background:#003BF5; display:inline-block;"></span>후기성 글</span>',
+                '<span style="display:inline-flex; align-items:center; gap:5px; color:#00B894;"><span style="width:10px; height:10px; border-radius:3px; background:#00B894; display:inline-block;"></span>정보성 글</span>',
+                '<span style="display:inline-flex; align-items:center; gap:5px; color:#94A3B8;"><span style="width:10px; height:10px; border-radius:3px; border:1px dashed #CBD5E1; background:#F8FAFC; display:inline-block;"></span>미등록</span>',
+                '</div></div>',
+            ]),
+            unsafe_allow_html=True,
+        )
 
         filtered_df = df.copy()
         if search_q.strip():
@@ -843,7 +1096,6 @@ def main() -> None:
 
         max_sel_visitor = max(int(df["선택일방문자"].max()), 1)
 
-        # 4열 반응형 카드 그리드 (가독성 대폭 강화 + 컬러 비교 게이지 바)
         grid_cols = st.columns(4)
         for idx, (_, row) in enumerate(filtered_df.iterrows()):
             rank_num = int(row["순위"])
@@ -885,6 +1137,7 @@ def main() -> None:
             yest_v = f"{int(row['어제마감']):,}명" if pd.notna(row["어제마감"]) else "미표시"
             ratio_pct = min(100, max(4, int(round(sel_raw / max_sel_visitor * 100)))) if sel_raw > 0 else 0
 
+            # 윗줄: 최근 5일 방문자수 회색/파란색 박스
             mini_days = []
             for d in recent_5d:
                 v = row.get(d, None)
@@ -901,6 +1154,9 @@ def main() -> None:
                     f'<div style="margin-top:1px;">{v_txt}</div></div>'
                 )
             mini_strip_html = "".join(mini_days)
+
+            # 아랫줄: 평일 5일(월~금) 포스팅 현황 색상 구분 박스 (후기=#003BF5 / 정보=#00B894 / 미등록=회색점선)
+            post_strip_html = build_weekday_post_strip_html(row["id"], weekdays_5, posts_by_blog)
 
             card_html = "".join([
                 f'<div class="{card_cls}">',
@@ -928,7 +1184,16 @@ def main() -> None:
                 '<div style="display:flex; gap:5px; margin-top:12px; padding-top:12px; border-top:1px solid #EEF2F6;">',
                 f'{mini_strip_html}',
                 '</div>',
-                '<div style="display:flex; justify-content:space-between; font-size:0.82rem; color:#475569; margin-top:10px; font-weight:600;">',
+                '<div style="margin-top:8px; padding-top:8px; border-top:1px dashed #E2E8F0;">',
+                '<div style="display:flex; justify-content:space-between; align-items:center; font-size:0.68rem; color:#64748B; font-weight:700; margin-bottom:5px;">',
+                '<span>평일 5일 포스팅 현황</span>',
+                '<span><span style="color:#003BF5;">●후기</span> <span style="color:#00B894; margin-left:4px;">●정보</span></span>',
+                '</div>',
+                '<div style="display:flex; gap:5px;">',
+                f'{post_strip_html}',
+                '</div>',
+                '</div>',
+                '<div style="display:flex; justify-content:space-between; font-size:0.82rem; color:#475569; margin-top:10px; padding-top:8px; border-top:1px solid #F1F5F9; font-weight:600;">',
                 f'<span>어제 마감: <strong style="color:#0F172A; font-weight:800;">{yest_v}</strong></span>',
                 f'<span>{cur_month_num}월 누적: <strong style="color:#003BF5; font-weight:800;">{int(row["월간누적합계"]):,}명</strong></span>',
                 '</div>',
