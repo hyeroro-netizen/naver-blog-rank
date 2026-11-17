@@ -34,10 +34,21 @@ SHEET_TAB_NAME = "블로그추이"
 
 WEEKDAY_KR = ["월", "화", "수", "목", "금", "토", "일"]
 
-REVIEW_KEYWORDS = [
-    "후기", "출고", "인도", "계약", "방문", "고객님", "회원님", "사례",
-    "승인", "진행", "완료", "실제", "매입", "판매후기", "출고후기",
-    "리스후기", "렌트후기", "할부후기", "성공", "인터뷰", "출고건",
+INFO_CATEGORY_KEYWORDS = ["정보", "칼럼", "상식", "뉴스", "가이드", "꿀팁", "노하우", "자동차정보"]
+REVIEW_CATEGORY_KEYWORDS = ["후기", "출고", "판매후기", "출고후기", "계약사례", "인도"]
+
+INFO_TITLE_KEYWORDS = [
+    "받는 법", "하는 법", "고르는 법", "구별", "시세조회", "감가", "총정리",
+    "체크리스트", "가이드", "장단점", "차이점", "주의사항", "서류", "수수료",
+    "취득세", "이전등록비", "성능점검", "카히스토리", "허위매물", "기준", "요령", "방법",
+]
+
+REVIEW_STRONG_PHRASES = [
+    "판매후기", "출고후기", "리스후기", "렌트후기", "할부후기", "매입후기",
+    "출고 도와", "출고도와", "출고했", "출고 완료", "인도해", "인도 완료",
+    "방문해 주셨", "방문해주셨", "방문해 주신", "방문해주신",
+    "고객님께서", "회원님께서", "차주님께서", "계약해 주셨", "계약해주셨",
+    "시운전", "출고건", "계약 사례", "출고 사례",
 ]
 
 BLOG_CHANNELS = [
@@ -402,14 +413,29 @@ def save_to_gsheet(ws, records: dict[str, dict[str, int]]) -> bool:
 # 3. 네이버 블로그 방문자수 + 최근 포스팅(평일 5일 후기/정보 분류) 수집 엔진
 # =============================================================================
 def classify_post_type(title: str, category: str = "", description: str = "") -> str:
-    """포스팅 제목·카테고리·본문 요약 키워드를 분석해 '후기' 또는 '정보'로 분류합니다."""
-    combined_head = f"{title} {category}".lower()
-    for kw in REVIEW_KEYWORDS:
-        if kw in combined_head:
+    """카테고리명(1순위) → 제목 패턴(2순위) → 본문 고객·출고 서사(3순위) 순으로 '후기'와 '정보'를 정밀 분류합니다."""
+    cat_low = category.lower().strip()
+    title_low = title.lower().strip()
+    desc_clean = re.sub(r"<[^>]+>", " ", description or "").lower()
+
+    # 1순위: 블로그 게시판/카테고리명 기준 (예: '02 자동차정보' vs '01 판매후기')
+    if cat_low:
+        if any(kw in cat_low for kw in INFO_CATEGORY_KEYWORDS):
+            return "정보"
+        if any(kw in cat_low for kw in REVIEW_CATEGORY_KEYWORDS):
             return "후기"
-    desc_hits = sum(1 for kw in REVIEW_KEYWORDS if kw in description.lower())
-    if desc_hits >= 2:
+
+    # 2순위: 제목에 명확한 후기 단어 또는 정보성 패턴이 있는 경우
+    if any(kw in title_low for kw in ["후기", "출고", "인도", "겟!"]):
         return "후기"
+    if any(kw in title_low for kw in INFO_TITLE_KEYWORDS):
+        return "정보"
+
+    # 3순위: 본문 도입부의 실제 고객 방문·출고 서사 문구 판별
+    full_text = f"{title_low} {desc_clean}"
+    if any(phrase in full_text for phrase in REVIEW_STRONG_PHRASES):
+        return "후기"
+
     return "정보"
 
 
