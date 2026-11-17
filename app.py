@@ -53,22 +53,22 @@ REVIEW_STRONG_PHRASES = [
 ]
 
 BLOG_CHANNELS = [
-    {"id": "va6xoti5qj", "name": "담소카", "group": "중고차·할부", "url": "https://blog.naver.com/va6xoti5qj"},
-    {"id": "7avapfrvtbv", "name": "진담카", "group": "중고차·할부", "url": "https://blog.naver.com/7avapfrvtbv"},
-    {"id": "jqqktejtgj", "name": "중부해", "group": "중고차·할부", "url": "https://blog.naver.com/jqqktejtgj"},
-    {"id": "hanto2528", "name": "회파중", "group": "회생·파산·할부", "url": "https://blog.naver.com/hanto2528"},
-    {"id": "8ah60uq", "name": "심운리스", "group": "오토리스·렌트", "url": "https://blog.naver.com/8ah60uq"},
-    {"id": "sh-7200", "name": "파복회", "group": "회생·파산·할부", "url": "https://blog.naver.com/sh-7200"},
-    {"id": "joongpahoe", "name": "중파회", "group": "회생·파산·할부", "url": "https://blog.naver.com/joongpahoe"},
-    {"id": "43n3km-m10e4ee", "name": "차품딜", "group": "중고차·할부", "url": "https://blog.naver.com/43n3km-m10e4ee"},
-    {"id": "ssswin00", "name": "여봉카", "group": "중고차·할부", "url": "https://blog.naver.com/ssswin00"},
-    {"id": "dadamauto", "name": "다담오토리스", "group": "오토리스·렌트", "url": "https://blog.naver.com/dadamauto"},
-    {"id": "simwooin00", "name": "리턴카", "group": "오토리스·렌트", "url": "https://blog.naver.com/simwooin00"},
-    {"id": "vbsr27960", "name": "차담오토리스", "group": "오토리스·렌트", "url": "https://blog.naver.com/vbsr27960"},
-    {"id": "kathyprovenzano", "name": "리품카", "group": "중고차·할부", "url": "https://blog.naver.com/kathyprovenzano"},
+    {"id": "va6xoti5qj", "name": "담소카", "group": "중고차", "url": "https://blog.naver.com/va6xoti5qj"},
+    {"id": "7avapfrvtbv", "name": "진담카", "group": "중고차", "url": "https://blog.naver.com/7avapfrvtbv"},
+    {"id": "jqqktejtgj", "name": "중부해", "group": "중고차", "url": "https://blog.naver.com/jqqktejtgj"},
+    {"id": "hanto2528", "name": "회파중", "group": "저신용 중고차", "url": "https://blog.naver.com/hanto2528"},
+    {"id": "8ah60uq", "name": "심운리스", "group": "중고차리스", "url": "https://blog.naver.com/8ah60uq"},
+    {"id": "sh-7200", "name": "파복회", "group": "저신용 중고차", "url": "https://blog.naver.com/sh-7200"},
+    {"id": "joongpahoe", "name": "중파회", "group": "저신용 중고차", "url": "https://blog.naver.com/joongpahoe"},
+    {"id": "43n3km-m10e4ee", "name": "차품딜", "group": "중고차", "url": "https://blog.naver.com/43n3km-m10e4ee"},
+    {"id": "ssswin00", "name": "여봉카", "group": "중고차", "url": "https://blog.naver.com/ssswin00"},
+    {"id": "dadamauto", "name": "다담오토리스", "group": "중고차리스", "url": "https://blog.naver.com/dadamauto"},
+    {"id": "simwooin00", "name": "리턴카", "group": "중고차", "url": "https://blog.naver.com/simwooin00"},
+    {"id": "vbsr27960", "name": "차담오토리스", "group": "중고차리스", "url": "https://blog.naver.com/vbsr27960"},
+    {"id": "kathyprovenzano", "name": "리품카", "group": "중고차", "url": "https://blog.naver.com/kathyprovenzano"},
     {"id": "gpdltlsck", "name": "헤이신차", "group": "신차·장기렌트", "url": "https://blog.naver.com/gpdltlsck"},
-    {"id": "easyplancar_", "name": "이지플랜카", "group": "신차·장기렌트", "url": "https://blog.naver.com/easyplancar_"},
-    {"id": "carrocar", "name": "차로차", "group": "중고차·할부", "url": "https://blog.naver.com/carrocar"},
+    {"id": "easyplancar_", "name": "이지플랜카", "group": "중고차", "url": "https://blog.naver.com/easyplancar_"},
+    {"id": "carrocar", "name": "차로차", "group": "중고차", "url": "https://blog.naver.com/carrocar"},
 ]
 
 NAME_TO_ID = {b["name"]: b["id"] for b in BLOG_CHANNELS}
